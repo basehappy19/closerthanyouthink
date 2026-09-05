@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import svgData from "@/lib/data/thailand_svg.json";
 
@@ -54,6 +54,7 @@ export default function ThailandMap({
   // The outer <svg viewBox> never changes; we translate+scale the content
   // inside it, which keeps the tooltip's screen-space math untouched.
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
+  const [isDragging, setIsDragging] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef({ dragging: false, moved: false, startX: 0, startY: 0, tx: 0, ty: 0 });
 
@@ -91,9 +92,24 @@ export default function ThailandMap({
     });
   }, [screenToViewBox]);
 
-  const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
-    e.preventDefault();
-    zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.2 : 1 / 1.2);
+  // React attaches onWheel as a passive listener, so calling preventDefault()
+  // inside a normal React handler silently fails to stop the page/container
+  // from scrolling underneath the map. A native listener registered with
+  // {passive:false} is the only way to actually block that scroll while the
+  // cursor is over the map.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const onNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      // Smaller, deltaY-proportional steps (instead of one fixed multiplier
+      // per event) plus the CSS transition on the <g> below are what make
+      // this feel continuous rather than stepped.
+      const factor = Math.pow(1.0016, -e.deltaY);
+      zoomAt(e.clientX, e.clientY, factor);
+    };
+    svg.addEventListener("wheel", onNativeWheel, { passive: false });
+    return () => svg.removeEventListener("wheel", onNativeWheel);
   }, [zoomAt]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
@@ -110,6 +126,7 @@ export default function ThailandMap({
   const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
     if (view.scale <= 1) return;
     dragRef.current = { dragging: true, moved: false, startX: e.clientX, startY: e.clientY, tx: view.tx, ty: view.ty };
+    setIsDragging(true);
     (e.target as Element).setPointerCapture(e.pointerId);
   }, [view.scale, view.tx, view.ty]);
 
@@ -129,6 +146,7 @@ export default function ThailandMap({
 
   const handlePointerUp = useCallback(() => {
     dragRef.current.dragging = false;
+    setIsDragging(false);
   }, []);
 
   const handleMouseEnter = useCallback(
@@ -201,14 +219,16 @@ export default function ThailandMap({
         viewBox={viewBox}
         style={{ width: "100%", height: "auto", display: "block", cursor: view.scale > 1 ? "grab" : "default", touchAction: "none" }}
         aria-label="แผนที่จังหวัดไทย ซูมและลากเพื่อดูรายละเอียดได้"
-        onWheel={handleWheel}
         onDoubleClick={handleDoubleClick}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
       >
-        <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+        <g
+          transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}
+          style={{ transition: isDragging ? "none" : "transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)" }}
+        >
           {provinces.map((prov) => {
             const count = countByProvince[prov.name] || 0;
             const fill = getHeatColor(count, maxCount);

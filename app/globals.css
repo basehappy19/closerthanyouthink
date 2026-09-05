@@ -593,6 +593,13 @@ input.invalid, .chip-group.invalid{
   fill:var(--mist);
   stroke:#fff;
   stroke-width:0.8;
+  /* Province boundaries are digitized polygons with lots of small, sharp
+     corners. The default miter join draws a pointed spike at every sharp
+     corner that's much longer than stroke-width — that's what reads as
+     "the border is thicker in some spots than others" once you zoom in.
+     Round joins/caps keep the line an even thickness along its whole length. */
+  stroke-linejoin:round;
+  stroke-linecap:round;
   cursor:pointer;
   transition:fill .2s ease, stroke .15s ease, stroke-width .15s ease;
   outline:none; /* replaced below with a stroke that follows the province's
