@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import svgData from "@/lib/data/thailand_svg.json";
 
 interface Province {
@@ -20,6 +21,10 @@ const { viewBox, provinces } = svgData as {
   viewBox: string;
   provinces: Province[];
 };
+
+const MIN_SCALE = 1;
+const MAX_SCALE = 8;
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 function getHeatColor(count: number, max: number): string {
   if (max === 0 || count === 0) return "#d8edee"; // mist (no data)
@@ -43,9 +48,88 @@ export default function ThailandMap({
     name: string;
     count: number;
   }>({ visible: false, x: 0, y: 0, name: "", count: 0 });
+  const [selected, setSelected] = useState<string | null>(null);
+
+  // Pan/zoom transform applied to the <g> wrapping the province paths.
+  // The outer <svg viewBox> never changes; we translate+scale the content
+  // inside it, which keeps the tooltip's screen-space math untouched.
+  const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
+  const dragRef = useRef({ dragging: false, moved: false, startX: 0, startY: 0, tx: 0, ty: 0 });
+
+  const [vbX, vbY, vbW, vbH] = useMemo(
+    () => viewBox.split(/\s+/).map(Number),
+    []
+  );
 
   const maxCount = Math.max(...Object.values(countByProvince), 1);
+
+  // Convert a pointer's screen position into the SVG's own (viewBox) coordinate
+  // space, independent of how much we've zoomed/panned the inner <g>.
+  const screenToViewBox = useCallback((clientX: number, clientY: number) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return {
+      x: vbX + ((clientX - rect.left) / rect.width) * vbW,
+      y: vbY + ((clientY - rect.top) / rect.height) * vbH,
+    };
+  }, [vbX, vbY, vbW, vbH]);
+
+  const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
+    setView((prev) => {
+      const p = screenToViewBox(clientX, clientY);
+      const newScale = clamp(prev.scale * factor, MIN_SCALE, MAX_SCALE);
+      if (newScale === 1) return { scale: 1, tx: 0, ty: 0 };
+      // Keep the point under the cursor/center fixed while scale changes.
+      const contentX = (p.x - prev.tx) / prev.scale;
+      const contentY = (p.y - prev.ty) / prev.scale;
+      return {
+        scale: newScale,
+        tx: p.x - contentX * newScale,
+        ty: p.y - contentY * newScale,
+      };
+    });
+  }, [screenToViewBox]);
+
+  const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, e.deltaY < 0 ? 1.2 : 1 / 1.2);
+  }, [zoomAt]);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    zoomAt(e.clientX, e.clientY, 1.6);
+  }, [zoomAt]);
+
+  const resetView = useCallback(() => setView({ scale: 1, tx: 0, ty: 0 }), []);
+  const zoomButton = useCallback((factor: number) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+  }, [zoomAt]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    if (view.scale <= 1) return;
+    dragRef.current = { dragging: true, moved: false, startX: e.clientX, startY: e.clientY, tx: view.tx, ty: view.ty };
+    (e.target as Element).setPointerCapture(e.pointerId);
+  }, [view.scale, view.tx, view.ty]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    if (!dragRef.current.dragging) return;
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
+    setView((prev) => ({
+      ...prev,
+      tx: dragRef.current.tx + dx * (vbW / rect.width),
+      ty: dragRef.current.ty + dy * (vbH / rect.height),
+    }));
+  }, [vbW, vbH]);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current.dragging = false;
+  }, []);
 
   const handleMouseEnter = useCallback(
     (e: React.MouseEvent, prov: Province) => {
@@ -71,7 +155,13 @@ export default function ThailandMap({
 
   const handleClick = useCallback(
     (prov: Province) => {
+      // A click that ends a drag (panning) shouldn't also toggle selection.
+      if (dragRef.current.moved) {
+        dragRef.current.moved = false;
+        return;
+      }
       const count = countByProvince[prov.name] || 0;
+      setSelected((prev) => (prev === prov.name ? null : prov.name));
       onProvinceClick?.(prov.name, count);
     },
     [countByProvince, onProvinceClick]
@@ -94,39 +184,62 @@ export default function ThailandMap({
 
   return (
     <div className="map-wrap">
+      <div className="map-zoom-controls">
+        <button type="button" className="map-zoom-btn" onClick={() => zoomButton(1.4)} aria-label="ซูมเข้า">
+          <ZoomIn size={15} />
+        </button>
+        <button type="button" className="map-zoom-btn" onClick={() => zoomButton(1 / 1.4)} aria-label="ซูมออก">
+          <ZoomOut size={15} />
+        </button>
+        <button type="button" className="map-zoom-btn" onClick={resetView} aria-label="รีเซ็ตมุมมอง">
+          <RotateCcw size={13} />
+        </button>
+      </div>
+
       <svg
         ref={svgRef}
         viewBox={viewBox}
-        style={{ width: "100%", height: "auto", display: "block" }}
-        aria-label="แผนที่จังหวัดไทย"
+        style={{ width: "100%", height: "auto", display: "block", cursor: view.scale > 1 ? "grab" : "default", touchAction: "none" }}
+        aria-label="แผนที่จังหวัดไทย ซูมและลากเพื่อดูรายละเอียดได้"
+        onWheel={handleWheel}
+        onDoubleClick={handleDoubleClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerUp}
       >
-        {provinces.map((prov) => {
-          const count = countByProvince[prov.name] || 0;
-          const fill = getHeatColor(count, maxCount);
-          return (
-            <path
-              key={prov.name}
-              d={prov.d}
-              fill={fill}
-              className="province-path"
-              style={{ fill }}
-              onMouseEnter={(e) => handleMouseEnter(e, prov)}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-              onClick={() => handleClick(prov)}
-              onTouchStart={(e) => handleTouchStart(e, prov)}
-              onTouchEnd={() =>
-                setTimeout(() => setTooltip((p) => ({ ...p, visible: false })), 2000)
-              }
-              aria-label={`${prov.name}: ${count} คน`}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleClick(prov);
-              }}
-            />
-          );
-        })}
+        <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+          {provinces.map((prov) => {
+            const count = countByProvince[prov.name] || 0;
+            const fill = getHeatColor(count, maxCount);
+            const isSelected = selected === prov.name;
+            return (
+              <path
+                key={prov.name}
+                d={prov.d}
+                fill={fill}
+                className={`province-path${isSelected ? " selected" : ""}`}
+                style={{ fill }}
+                vectorEffect="non-scaling-stroke"
+                onMouseEnter={(e) => handleMouseEnter(e, prov)}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
+                onClick={() => handleClick(prov)}
+                onTouchStart={(e) => handleTouchStart(e, prov)}
+                onTouchEnd={() =>
+                  setTimeout(() => setTooltip((p) => ({ ...p, visible: false })), 2000)
+                }
+                aria-label={`${prov.name}: ${count} คน`}
+                aria-pressed={isSelected}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleClick(prov);
+                }}
+              />
+            );
+          })}
+        </g>
       </svg>
 
       {/* Legend */}
@@ -153,6 +266,11 @@ export default function ThailandMap({
           />
         ))}
         <span>มาก</span>
+        {selected && (
+          <span style={{ marginLeft: "auto", fontWeight: 600, color: "var(--ice-700)" }}>
+            เลือก: {selected}
+          </span>
+        )}
       </div>
 
       {/* Tooltip */}

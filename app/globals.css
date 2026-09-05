@@ -543,9 +543,34 @@ input.invalid, .chip-group.invalid{
 .map-wrap{
   position:relative;
   border-radius:var(--radius-md);
-  overflow:visible;
+  overflow:hidden;
   background:var(--ice-50);
 }
+.map-zoom-controls{
+  position:absolute;
+  top:10px;
+  right:10px;
+  z-index:10;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.map-zoom-btn{
+  width:30px;
+  height:30px;
+  border:none;
+  border-radius:999px;
+  background:#fff;
+  color:var(--ice-700);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  box-shadow:0 2px 10px rgba(15,92,107,0.18);
+  transition:background .15s ease, transform .12s ease;
+}
+.map-zoom-btn:hover{background:var(--tint-a);}
+.map-zoom-btn:active{transform:scale(.92);}
 .map-tooltip{
   position:fixed;
   background:rgba(15,46,51,0.92);
@@ -569,9 +594,24 @@ input.invalid, .chip-group.invalid{
   stroke:#fff;
   stroke-width:0.8;
   cursor:pointer;
-  transition:fill .2s ease;
+  transition:fill .2s ease, stroke .15s ease, stroke-width .15s ease;
+  outline:none; /* replaced below with a stroke that follows the province's
+                   own shape — the browser's default focus ring on an SVG
+                   path is always a rectangle around its bounding box, not
+                   its outline, which is what produced the square frame. */
 }
-.province-path:hover{stroke-width:1.5;}
+.province-path:hover{
+  stroke:var(--ice-500);
+  stroke-width:2;
+}
+.province-path:focus-visible{
+  stroke:var(--ice-600);
+  stroke-width:2.5;
+}
+.province-path.selected{
+  stroke:var(--ice-700);
+  stroke-width:3;
+}
 
 /* ---------- knowledge / news cards ---------- */
 .news-grid{
