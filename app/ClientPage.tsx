@@ -286,7 +286,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
       {activeView === "view-survey" && (
         <section className="view active">
           {currentPhase === "start" && (
-            <div className="hero" style={{ animation: "fadeIn 0.4s ease", paddingBottom: 0, textAlign: "center" }}>
+            <div className="hero" style={{ animation: "fadeIn 0.4s ease", paddingBottom: 0, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
               <div className="mascot" style={{ display: "inline-block", marginBottom: 16 }}>
                 <svg width="72" height="72" viewBox="0 0 120 120" fill="none">
                   <rect x="18" y="18" width="84" height="84" rx="26" fill="url(#g2)"/>
@@ -302,21 +302,21 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                 </svg>
               </div>
               <h1 style={{ marginTop: 12 }}>พร้อมจะทดสอบความเข้าใจเรื่องโลกร้อนหรือยัง?</h1>
-              <div style={{ marginTop: 24, padding: "0 16px" }}>
-                <button type="button" className="btn-primary" onClick={() => setCurrentPhase("demographics")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              
+              <div className="climate-strip" style={{ marginTop: 32, marginBottom: 32 }}>
+                {CLIMATE_IMAGES.map((img) => (
+                  <div className="climate-img-cell" key={img.src}>
+                    <img src={img.src} alt={img.alt} loading="lazy" />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 12, padding: "0 16px", width: "100%", maxWidth: 400 }}>
+                <button type="button" className="btn-primary" onClick={() => setCurrentPhase("demographics")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%" }}>
                   เริ่มทำแบบสำรวจ <ArrowRight size={18} />
                 </button>
               </div>
-            </div>
-          )}
-
-          {currentPhase !== "start" && currentPhase !== "summary" && (
-            <div className="climate-strip">
-              {CLIMATE_IMAGES.map((img) => (
-                <div className="climate-img-cell" key={img.src}>
-                  <img src={img.src} alt={img.alt} loading="lazy" />
-                </div>
-              ))}
+              <p className="privacy-note" style={{ marginTop: 16 }}>คำตอบของเธอจะถูกรวมเป็นสถิติภาพรวมที่ทุกคนเห็นได้ ไม่มีการเก็บชื่อจริง</p>
             </div>
           )}
 
@@ -523,7 +523,6 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
               </div>
             );
           })()}
-          <p className="privacy-note">คำตอบของเธอจะถูกรวมเป็นสถิติภาพรวมที่ทุกคนเห็นได้ ไม่มีการเก็บชื่อจริง</p>
         </section>
       )}
 

@@ -101,13 +101,13 @@ a{color:inherit;}
 .tab{
   border:none;
   background:transparent;
-  padding:6px 0;
+  padding:8px 4px;
   border-radius:12px;
   font-family:inherit;
   font-weight:600;
   color:var(--ink-soft);
   cursor:pointer;
-  transition:color .2s ease;
+  transition:color .2s ease, background .2s ease;
   white-space:nowrap;
   flex:1;
   display:flex;
@@ -117,6 +117,7 @@ a{color:inherit;}
 }
 .tab.active{
   color:var(--ice-700);
+  background: var(--ice-100);
 }
 
 /* ---------- views ---------- */
@@ -149,7 +150,7 @@ a{color:inherit;}
 /* ---------- progress ---------- */
 #progressWrap{margin-bottom:14px;}
 .progress-bar-track{
-  height:6px;background:var(--mist);border-radius:999px;overflow:hidden;margin-bottom:6px;
+  height:8px;background:var(--ice-50);border:1px solid var(--ice-300);border-radius:999px;overflow:hidden;margin-bottom:6px;
 }
 .progress-bar-fill{
   height:100%;background:var(--ice-500);border-radius:999px;transition:width .3s ease;
