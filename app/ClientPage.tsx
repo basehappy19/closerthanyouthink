@@ -82,7 +82,7 @@ const NEWS_ITEMS = [
 
 export default function ClientPage({ initialSchools, initialStats }: { initialSchools: string[], initialStats: any }) {
   const [activeView, setActiveView] = useState("view-survey");
-  const [currentPhase, setCurrentPhase] = useState("demographics");
+  const [currentPhase, setCurrentPhase] = useState("start");
 
   const [demographics, setDemographics] = useState({
     ageRange: "", province: "", district: "", subdistrict: "", school: "",
@@ -285,34 +285,42 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
       {/* ======================== SURVEY VIEW ======================== */}
       {activeView === "view-survey" && (
         <section className="view active">
-          <div className="hero">
-            <div className="mascot">
-              <svg width="72" height="72" viewBox="0 0 120 120" fill="none">
-                <rect x="18" y="18" width="84" height="84" rx="26" fill="url(#g2)"/>
-                <circle cx="46" cy="54" r="5.5" fill="#0f5c6b"/>
-                <circle cx="76" cy="54" r="5.5" fill="#0f5c6b"/>
-                <path d="M44 70 Q62 84 80 70" stroke="#0f5c6b" strokeWidth="5" strokeLinecap="round" fill="none"/>
-                <path d="M30 96 Q30 110 20 116 Q34 116 37 102 Q40 112 52 112 Q42 102 45 92 Z" fill="#1b8a9e"/>
-                <defs>
-                  <linearGradient id="g2" x1="18" y1="18" x2="102" y2="102" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="#eef9fa"/><stop offset="1" stopColor="#a9dfe4"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-            <h1>ก้อนน้ำแข็งขอถามอะไรหน่อยนะ</h1>
-            <p>ตอบคำถามชุดแรกก่อน แล้วเราจะให้ดูคลิปกับโปสเตอร์ จากนั้นตอบอีกครั้ง เพื่อดูว่าความเข้าใจของเธอเปลี่ยนไปแค่ไหน</p>
-          </div>
-
-          <div className="climate-strip">
-            {CLIMATE_IMAGES.map((img) => (
-              <div className="climate-img-cell" key={img.src}>
-                <img src={img.src} alt={img.alt} loading="lazy" />
+          {currentPhase === "start" && (
+            <div className="hero" style={{ animation: "fadeIn 0.4s ease", paddingBottom: 0, textAlign: "center" }}>
+              <div className="mascot" style={{ display: "inline-block", marginBottom: 16 }}>
+                <svg width="72" height="72" viewBox="0 0 120 120" fill="none">
+                  <rect x="18" y="18" width="84" height="84" rx="26" fill="url(#g2)"/>
+                  <circle cx="46" cy="54" r="5.5" fill="#0f5c6b"/>
+                  <circle cx="76" cy="54" r="5.5" fill="#0f5c6b"/>
+                  <path d="M44 70 Q62 84 80 70" stroke="#0f5c6b" strokeWidth="5" strokeLinecap="round" fill="none"/>
+                  <path d="M30 96 Q30 110 20 116 Q34 116 37 102 Q40 112 52 112 Q42 102 45 92 Z" fill="#1b8a9e"/>
+                  <defs>
+                    <linearGradient id="g2" x1="18" y1="18" x2="102" y2="102" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#eef9fa"/><stop offset="1" stopColor="#a9dfe4"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
               </div>
-            ))}
-          </div>
+              <h1 style={{ marginTop: 12 }}>พร้อมจะทดสอบความเข้าใจเรื่องโลกร้อนหรือยัง?</h1>
+              <div style={{ marginTop: 24, padding: "0 16px" }}>
+                <button type="button" className="btn-primary" onClick={() => setCurrentPhase("demographics")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  เริ่มทำแบบสำรวจ <ArrowRight size={18} />
+                </button>
+              </div>
+            </div>
+          )}
 
-          {currentPhase !== "summary" && (
+          {currentPhase !== "start" && currentPhase !== "summary" && (
+            <div className="climate-strip">
+              {CLIMATE_IMAGES.map((img) => (
+                <div className="climate-img-cell" key={img.src}>
+                  <img src={img.src} alt={img.alt} loading="lazy" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {currentPhase !== "start" && currentPhase !== "summary" && (
             <div id="progressWrap">
               <div className="progress-bar-track">
                 <div className="progress-bar-fill" style={{ width: `${progressStep * 25}%` }} />
@@ -510,7 +518,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
                   <button type="button" className="btn-primary" onClick={() => setActiveView("view-stats")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>ดูสถิติภาพรวมของทุกคน <ArrowRight size={18} /></button>
-                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); setCurrentPhase("demographics"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
+                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); setCurrentPhase("start"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
                 </div>
               </div>
             );
