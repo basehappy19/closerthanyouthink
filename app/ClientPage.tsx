@@ -322,8 +322,10 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
 
           {currentPhase !== "start" && currentPhase !== "summary" && (
             <div id="progressWrap">
-              <div className="progress-bar-track">
-                <div className="progress-bar-fill" style={{ width: `${progressStep * 25}%` }} />
+              <div className="progress-segments">
+                {[1, 2, 3, 4].map(step => (
+                  <div key={step} className={`progress-segment ${step <= progressStep ? "filled" : ""}`} />
+                ))}
               </div>
               <div className="progress-label">ขั้นตอนที่ {progressStep} จาก 4</div>
             </div>
