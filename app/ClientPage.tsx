@@ -544,7 +544,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
 
       {/* ======================== STATS VIEW ======================== */}
       {activeView === "view-stats" && (
-        <section className="view active">
+        <section className="view active full-bleed-mobile">
           {loadingStats ? (
             <div className="loading-spin" />
           ) : stats && stats.total > 0 ? (
@@ -582,7 +582,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
 
       {/* ======================== KNOWLEDGE VIEW ======================== */}
       {activeView === "view-knowledge" && (
-        <section className="view active">
+        <section className="view active full-bleed-mobile">
           <div className="card">
             <div style={{ marginBottom: 18 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--ice-700)", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 8 }}><Newspaper size={18} /> ความรู้และข่าวสาร</h2>
@@ -616,7 +616,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
 
       {/* ======================== ABOUT VIEW ======================== */}
       {activeView === "view-about" && (
-        <section className="view active">
+        <section className="view active full-bleed-mobile">
           <div className="card">
             <div className="about-section">
               <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}><ClipboardList size={16} /> เกี่ยวกับโครงงาน</h3>

@@ -825,6 +825,32 @@ input.invalid, .chip-group.invalid{
 }
 
 /* ========================================
+   MOBILE FULL-BLEED SECTIONS
+   ======================================== */
+@media (max-width: 899px) {
+  .full-bleed-mobile {
+    margin-left: -12px;
+    margin-right: -12px;
+  }
+  .full-bleed-mobile .card,
+  .full-bleed-mobile .stat-card,
+  .full-bleed-mobile .stats-hero {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  .full-bleed-mobile .stat-grid {
+    gap: 0;
+  }
+  .full-bleed-mobile .stats-hero {
+    margin-bottom: 0;
+  }
+  .full-bleed-mobile .stat-card {
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+  }
+}
+
+/* ========================================
    DESKTOP TWO-COLUMN LAYOUT (>= 900px)
    Left sidebar (fixed) + Right scrollable content
    ======================================== */
