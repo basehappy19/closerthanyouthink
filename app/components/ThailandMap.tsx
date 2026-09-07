@@ -123,15 +123,54 @@ export default function ThailandMap({
     zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   }, [zoomAt]);
 
+  const pointersRef = useRef<Map<number, { x: number, y: number }>>(new Map());
+  const initialPinchDistRef = useRef<number | null>(null);
+  const initialScaleRef = useRef<number>(1);
+
   const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (view.scale <= 1) return;
-    dragRef.current = { dragging: true, moved: false, startX: e.clientX, startY: e.clientY, tx: view.tx, ty: view.ty };
-    setIsDragging(true);
     (e.target as Element).setPointerCapture(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointersRef.current.size === 2) {
+      const pts = Array.from(pointersRef.current.values());
+      initialPinchDistRef.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      initialScaleRef.current = view.scale;
+    } else if (pointersRef.current.size === 1) {
+      if (view.scale <= 1) return;
+      dragRef.current = { dragging: true, moved: false, startX: e.clientX, startY: e.clientY, tx: view.tx, ty: view.ty };
+      setIsDragging(true);
+    }
   }, [view.scale, view.tx, view.ty]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (!dragRef.current.dragging) return;
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    if (pointersRef.current.size === 2 && initialPinchDistRef.current) {
+      const pts = Array.from(pointersRef.current.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const factor = dist / initialPinchDistRef.current;
+      
+      const cx = (pts[0].x + pts[1].x) / 2;
+      const cy = (pts[0].y + pts[1].y) / 2;
+      
+      // Compute zoom
+      const p = screenToViewBox(cx, cy);
+      const newScale = clamp(initialScaleRef.current * factor, MIN_SCALE, MAX_SCALE);
+      if (newScale !== view.scale) {
+        const contentX = (p.x - view.tx) / view.scale;
+        const contentY = (p.y - view.ty) / view.scale;
+        setView({
+          scale: newScale,
+          tx: p.x - contentX * newScale,
+          ty: p.y - contentY * newScale,
+        });
+      }
+      return;
+    }
+
+    if (!dragRef.current.dragging || pointersRef.current.size !== 1) return;
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const dx = e.clientX - dragRef.current.startX;
@@ -142,11 +181,17 @@ export default function ThailandMap({
       tx: dragRef.current.tx + dx * (vbW / rect.width),
       ty: dragRef.current.ty + dy * (vbH / rect.height),
     }));
-  }, [vbW, vbH]);
+  }, [vbW, vbH, screenToViewBox, view.scale, view.tx, view.ty]);
 
-  const handlePointerUp = useCallback(() => {
-    dragRef.current.dragging = false;
-    setIsDragging(false);
+  const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) {
+      initialPinchDistRef.current = null;
+    }
+    if (pointersRef.current.size === 0) {
+      dragRef.current.dragging = false;
+      setIsDragging(false);
+    }
   }, []);
 
   const handleMouseEnter = useCallback(

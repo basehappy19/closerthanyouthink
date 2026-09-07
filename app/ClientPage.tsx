@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import addressDataRaw from "@/lib/data/address_tree.json";
@@ -30,7 +31,7 @@ const VIDEO_YOUTUBE_ID = "";
 
 const CLIMATE_IMAGES = [
   { src: "https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?w=400&q=70", alt: "น้ำแข็งขั้วโลกละลาย" },
-  { src: "https://images.unsplash.com/photo-1504608524841-42584120d693?w=400&q=70", alt: "น้ำท่วม" },
+  { src: "https://images.unsplash.com/photo-1547683905-f686c993aae5?w=400&q=70", alt: "น้ำท่วม" },
   { src: "https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?w=400&q=70", alt: "คลื่นความร้อน" },
 ];
 
@@ -39,42 +40,42 @@ const NEWS_ITEMS = [
     tag: "ไทย",
     title: "กรุงเทพฯ เสี่ยงจมน้ำภายในปี 2030 จากภาวะโลกร้อน",
     source: "BBC Thai",
-    href: "https://www.bbc.com/thai/thailand-53726563",
+    href: "https://www.bbc.com/thai/topics/cxl9mvwzw3pt",
     img: "https://images.unsplash.com/photo-1583417319070-4a69db38a482?w=400&q=70",
   },
   {
     tag: "โลก",
     title: "แผ่นน้ำแข็งกรีนแลนด์ละลายเร็วกว่าที่คาดถึง 7 เท่า",
     source: "Nature",
-    href: "https://www.nature.com",
-    img: "https://images.unsplash.com/photo-1477322524744-0eece9e79640?w=400&q=70",
+    href: "https://www.nature.com/nclimate/",
+    img: "https://images.unsplash.com/photo-1518414441020-fc6d7d6bfd89?w=400&q=70",
   },
   {
     tag: "ไทย",
     title: "พายุฤดูร้อนในไทยรุนแรงขึ้นจากการเปลี่ยนแปลงสภาพภูมิอากาศ",
     source: "Thai PBS World",
-    href: "https://www.thaipbsworld.com",
+    href: "https://www.thaipbsworld.com/category/environment/",
     img: "https://images.unsplash.com/photo-1527482937786-6608f6e14c15?w=400&q=70",
   },
   {
     tag: "โลก",
     title: "ระดับน้ำทะเลสูงขึ้น 20 ซม. ภายในปี 2100 — รายงาน IPCC",
     source: "IPCC",
-    href: "https://www.ipcc.ch",
-    img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=70",
+    href: "https://www.ipcc.ch/",
+    img: "https://images.unsplash.com/photo-1483683804023-6ccdb62f86ef?w=400&q=70",
   },
   {
     tag: "เอเชีย",
     title: "บังกลาเทศจม: ชาวบ้านล้านคนอพยพหนีน้ำท่วม",
     source: "Reuters",
-    href: "https://www.reuters.com",
-    img: "https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?w=400&q=70",
+    href: "https://www.reuters.com/business/environment/",
+    img: "https://images.unsplash.com/photo-1428592953211-077101b2021b?w=400&q=70",
   },
   {
     tag: "โลก",
     title: "ปลาวาฬเกยตื้นเป็นสัญญาณของมหาสมุทรกำลังเปลี่ยนแปลง",
     source: "National Geographic",
-    href: "https://www.nationalgeographic.com",
+    href: "https://www.nationalgeographic.com/environment/",
     img: "https://images.unsplash.com/photo-1568430462989-44163eb1752f?w=400&q=70",
   },
 ];
@@ -158,6 +159,15 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
   const computeScore = (answers: Record<string, string>) =>
     KNOWLEDGE_ITEMS.filter((item) => answers[item.field] === item.correct).length;
 
+  const router = useRouter();
+
+  useEffect(() => {
+    if (localStorage.getItem("surveySubmitted") === "true") {
+      setCurrentPhase("summary");
+      // Load previous answers if needed, or just show a simplified summary
+    }
+  }, []);
+
   const finishSurvey = async () => {
     const preScore = computeScore(round1Answers);
     const postScore = computeScore(round2Answers);
@@ -174,6 +184,9 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
         pre_score: preScore,
         post_score: postScore,
       }]);
+      localStorage.setItem("surveySubmitted", "true");
+      
+      router.refresh(); // Refresh Next.js server components in the background
     } catch (err) { console.error("Save failed", err); }
   };
 
@@ -214,6 +227,27 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
         <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(6, (v / max) * 100)}%` }} /></div>
       </div>
     ));
+  };
+
+  const renderDetailedBarChart = (data: Record<string, number>, scores: Record<string, {pre: number, post: number, count: number}>, limit = 6) => {
+    const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, limit);
+    const max = sorted.length ? sorted[0][1] : 1;
+    return sorted.map(([k, v]) => {
+      const s = scores[k];
+      const pre = s ? (s.pre / s.count).toFixed(1) : "-";
+      const post = s ? (s.post / s.count).toFixed(1) : "-";
+      return (
+        <div className="bar-row" key={k} style={{ marginBottom: 12 }}>
+          <div className="bar-row-top">
+            <span>{k} <span style={{fontSize: 10.5, color: "var(--ink-soft)", fontWeight: "normal"}}>({v} คน)</span></span>
+            <span className="bar-count" style={{ fontSize: 11.5, fontWeight: "normal" }}>
+              ก่อน: <b style={{color:"var(--ice-700)"}}>{pre}</b> → หลัง: <b style={{color:"var(--good)"}}>{post}</b>
+            </span>
+          </div>
+          <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(6, (v / max) * 100)}%` }} /></div>
+        </div>
+      );
+    });
   };
 
   const TABS = [
@@ -434,38 +468,50 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
           )}
 
           {currentPhase === "summary" && (() => {
+            const hasAnswers = Object.keys(round1Answers).length > 0;
             const pre = computeScore(round1Answers);
             const post = computeScore(round2Answers);
             const diff = post - pre;
             return (
               <div className="phase active card">
                 <div className="summary-icon" style={{ color: "var(--ice-500)", display: "flex", justifyContent: "center", marginBottom: 12 }}><Award size={40} /></div>
-                <h2 style={{ textAlign: "center" }}>สรุปผลก่อน-หลังของเธอ</h2>
-                <div className="summary-hero">
-                  <div className="summary-score-card"><div className="score-label">ตอบถูกก่อนดูสื่อ</div><div className="score-value">{pre}/5</div></div>
-                  <div className="summary-score-card post"><div className="score-label">ตอบถูกหลังดูสื่อ</div><div className="score-value">{post}/5</div></div>
-                </div>
-                <div className="summary-delta" style={{ color: diff > 0 ? "var(--good)" : "var(--ink-soft)", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  {diff > 0 ? <><CheckCircle size={16} /> เธอตอบถูกเพิ่มขึ้น {diff} ข้อ หลังดูคลิปกับโปสเตอร์</>
-                    : diff < 0 ? `รอบหลังตอบถูกน้อยลง ${Math.abs(diff)} ข้อ ลองดูคลิปอีกครั้งได้นะ`
-                    : "คะแนนเท่าเดิม ลองทบทวนคลิปกับโปสเตอร์อีกรอบได้"}
-                </div>
-                <div className="section-divider first">มุมมองของเธอเปลี่ยนไปยังไงบ้าง</div>
-                <div className="compare-list">
-                  {[
-                    { key: "q1", label: "รู้สึกว่าโลกร้อนใกล้ตัว", isScale: true },
-                    { key: "q2", label: "คิดว่ากระทบไทย" },
-                    { key: "q3", label: "ทราบเรื่องกรุงเทพเสี่ยง" },
-                    { key: "q4", label: "ความกังวลต่อพื้นที่ตัวเอง", isScale: true },
-                    { key: "q5", label: "เคยมีส่วนร่วมลดโลกร้อน" },
-                  ].map(({ key, label, isScale }: any) => (
-                    <div className="compare-row" key={key}>
-                      <span className="compare-label">{label}</span>
-                      <span className="compare-vals">{round1Answers[key]}{isScale ? "/5" : ""} → <b>{round2Answers[key]}{isScale ? "/5" : ""}</b></span>
+                <h2 style={{ textAlign: "center" }}>{hasAnswers ? "สรุปผลก่อน-หลังของเธอ" : "ขอบคุณที่ร่วมทำแบบสำรวจ!"}</h2>
+                
+                {hasAnswers ? (
+                  <>
+                    <div className="summary-hero">
+                      <div className="summary-score-card"><div className="score-label">ตอบถูกก่อนดูสื่อ</div><div className="score-value">{pre}/5</div></div>
+                      <div className="summary-score-card post"><div className="score-label">ตอบถูกหลังดูสื่อ</div><div className="score-value">{post}/5</div></div>
                     </div>
-                  ))}
+                    <div className="summary-delta" style={{ color: diff > 0 ? "var(--good)" : "var(--ink-soft)", display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      {diff > 0 ? <><CheckCircle size={16} /> เธอตอบถูกเพิ่มขึ้น {diff} ข้อ หลังดูคลิปกับโปสเตอร์</>
+                        : diff < 0 ? `รอบหลังตอบถูกน้อยลง ${Math.abs(diff)} ข้อ ลองดูคลิปอีกครั้งได้นะ`
+                        : "คะแนนเท่าเดิม ลองทบทวนคลิปกับโปสเตอร์อีกรอบได้"}
+                    </div>
+                    <div className="section-divider first">มุมมองของเธอเปลี่ยนไปยังไงบ้าง</div>
+                    <div className="compare-list">
+                      {[
+                        { key: "q1", label: "รู้สึกว่าโลกร้อนใกล้ตัว", isScale: true },
+                        { key: "q2", label: "คิดว่ากระทบไทย" },
+                        { key: "q3", label: "ทราบเรื่องกรุงเทพเสี่ยง" },
+                        { key: "q4", label: "ความกังวลต่อพื้นที่ตัวเอง", isScale: true },
+                        { key: "q5", label: "เคยมีส่วนร่วมลดโลกร้อน" },
+                      ].map(({ key, label, isScale }: any) => (
+                        <div className="compare-row" key={key}>
+                          <span className="compare-label">{label}</span>
+                          <span className="compare-vals">{round1Answers[key]}{isScale ? "/5" : ""} → <b>{round2Answers[key]}{isScale ? "/5" : ""}</b></span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ textAlign: "center", color: "var(--ink-soft)", marginBottom: 24 }}>เธอได้ส่งคำตอบจากเครื่องนี้ไปแล้ว</p>
+                )}
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
+                  <button type="button" className="btn-primary" onClick={() => setActiveView("view-stats")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>ดูสถิติภาพรวมของทุกคน <ArrowRight size={18} /></button>
+                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); setCurrentPhase("demographics"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
                 </div>
-                <button type="button" className="btn-primary" onClick={() => setActiveView("view-stats")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>ดูสถิติภาพรวมของทุกคน <ArrowRight size={18} /></button>
               </div>
             );
           })()}
@@ -493,13 +539,13 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                     <div className="score-compare-item"><div className="n" style={{ color: "var(--good)" }}>{(stats.sumPostScore / stats.total).toFixed(1)}</div><div className="l">หลังดูสื่อ</div></div>
                   </div>
                 </div>
+                <div className="stat-card tint-a"><h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={16}/> จังหวัดที่ตอบเยอะที่สุด</h3>{renderDetailedBarChart(stats.byProvince, stats.scoreByProvince || {}, 5)}</div>
+                <div className="stat-card tint-a"><h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Users size={16}/> ช่วงอายุของผู้ตอบ</h3>{renderBarChart(stats.byAge, 7)}</div>
+                <div className="stat-card tint-c"><h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Award size={16}/> โรงเรียนที่ตอบเยอะที่สุด</h3>{renderDetailedBarChart(stats.bySchool, stats.scoreBySchool || {}, 5)}</div>
                 <div className="stat-card white">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={16}/> แผนที่จังหวัดที่ตอบแบบสำรวจ</h3>
                   <ThailandMap countByProvince={stats.byProvince} />
                 </div>
-                <div className="stat-card tint-a"><h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MapPin size={16}/> จังหวัดที่ตอบเยอะที่สุด</h3>{renderBarChart(stats.byProvince, 5)}</div>
-                <div className="stat-card tint-a"><h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Users size={16}/> ช่วงอายุของผู้ตอบ</h3>{renderBarChart(stats.byAge, 7)}</div>
-                <div className="stat-card tint-c"><h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Award size={16}/> โรงเรียนที่ตอบเยอะที่สุด</h3>{renderBarChart(stats.bySchool, 5)}</div>
               </div>
             </>
           ) : (
@@ -668,14 +714,16 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
             </svg>
             <span>ไกลแค่ไหน<br/>ก็ท่วมถึง</span>
           </div>
+        </div>
+        {renderMainContent()}
+        <div className="mobile-bottom-bar">
           <div className="tabs">
             {TABS.map((t) => (
-              <button key={t.id} className={`tab${activeView === t.id ? " active" : ""}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                onClick={() => setActiveView(t.id)}><t.icon size={14} /> {t.label}</button>
+              <button key={t.id} className={`tab${activeView === t.id ? " active" : ""}`}
+                onClick={() => { setActiveView(t.id); scrollToTop(); }}><t.icon size={22} /> <span style={{fontSize: '10px'}}>{t.label}</span></button>
             ))}
           </div>
         </div>
-        {renderMainContent()}
       </div>
     </>
   );
