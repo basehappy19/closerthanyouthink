@@ -721,7 +721,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                 </linearGradient>
               </defs>
             </svg>
-            <span>ไกลแค่ไหน<br/>ก็ท่วมถึง</span>
+            <span style={{ color: "#fff", textShadow: "0 1px 6px rgba(0,0,0,0.25)" }}>ไกลแค่ไหน<br/>ก็ท่วมถึง</span>
           </div>
         </div>
         {renderMainContent()}
@@ -733,6 +733,15 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
             ))}
           </div>
         </div>
+      </div>
+
+      {/* ===== Wave layer (decorative, pinned to bottom) ===== */}
+      <div className="wave-bg" aria-hidden="true">
+        <svg viewBox="0 0 1440 160" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0,80 C180,120 360,40 540,80 C720,120 900,40 1080,80 C1260,120 1440,40 1440,80 L1440,160 L0,160 Z" fill="rgba(255,255,255,0.08)"/>
+          <path d="M0,100 C240,60 480,140 720,100 C960,60 1200,140 1440,100 L1440,160 L0,160 Z" fill="rgba(255,255,255,0.06)"/>
+          <path d="M0,120 C200,90 400,150 600,120 C800,90 1000,150 1200,120 C1300,105 1380,115 1440,120 L1440,160 L0,160 Z" fill="rgba(255,255,255,0.12)"/>
+        </svg>
       </div>
     </>
   );
