@@ -166,7 +166,21 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
       setCurrentPhase("summary");
       // Load previous answers if needed, or just show a simplified summary
     }
+    const savedView = localStorage.getItem("activeView");
+    if (savedView) {
+      setActiveView(savedView);
+    }
   }, []);
+
+  useEffect(() => {
+    setStats(initialStats);
+  }, [initialStats]);
+
+  const handleViewChange = (viewId: string) => {
+    setActiveView(viewId);
+    localStorage.setItem("activeView", viewId);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const finishSurvey = async () => {
     const preScore = computeScore(round1Answers);
@@ -519,8 +533,8 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                 )}
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-                  <button type="button" className="btn-primary" onClick={() => setActiveView("view-stats")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>ดูสถิติภาพรวมของทุกคน <ArrowRight size={18} /></button>
-                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); setCurrentPhase("start"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
+                  <button type="button" className="btn-primary" onClick={() => handleViewChange("view-stats")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>ดูสถิติภาพรวมของทุกคน <ArrowRight size={18} /></button>
+                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); setCurrentPhase("start"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
                 </div>
               </div>
             );
@@ -688,7 +702,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
             {TABS.map((t) => (
               <button key={t.id}
                 className={`sidebar-tab${activeView === t.id ? " active" : ""}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-                onClick={() => { setActiveView(t.id); scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                onClick={() => handleViewChange(t.id)}
               ><t.icon size={18} /> {t.label}</button>
             ))}
           </nav>
@@ -729,7 +743,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
           <div className="tabs">
             {TABS.map((t) => (
               <button key={t.id} className={`tab${activeView === t.id ? " active" : ""}`}
-                onClick={() => { setActiveView(t.id); scrollToTop(); }}><t.icon size={22} /> <span style={{fontSize: '10px'}}>{t.label}</span></button>
+                onClick={() => { handleViewChange(t.id); scrollToTop(); }}><t.icon size={22} /> <span style={{fontSize: '10px'}}>{t.label}</span></button>
             ))}
           </div>
         </div>
