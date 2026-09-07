@@ -202,17 +202,18 @@ a{color:inherit;}
   font-size:21px;
   line-height:1.4;
   margin:6px 0 8px;
-  color:#fff;
-  font-weight:700;
-  text-shadow:0 2px 12px rgba(0,0,0,0.2);
+  color:var(--ice-900);
+  font-weight:800;
+  text-shadow:0 1px 3px rgba(255,255,255,0.6);
 }
 .hero p{
   font-size:13.5px;
   line-height:1.6;
-  color:rgba(220,245,250,0.9);
+  color:var(--ice-700);
   margin:0;
   max-width:380px;
   margin-inline:auto;
+  font-weight:500;
 }
 
 /* ---------- progress ---------- */

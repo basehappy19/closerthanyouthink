@@ -49,5 +49,9 @@ export default async function Page() {
     }
   } catch (err) {}
 
-  return <ClientPage initialSchools={knownSchools} initialStats={initialStats} />;
+  const { cookies } = await import("next/headers");
+  const cookieStore = await cookies();
+  const hasSubmitted = cookieStore.get("surveySubmitted")?.value === "true";
+
+  return <ClientPage initialSchools={knownSchools} initialStats={initialStats} hasSubmitted={hasSubmitted} />;
 }

@@ -80,9 +80,9 @@ const NEWS_ITEMS = [
   },
 ];
 
-export default function ClientPage({ initialSchools, initialStats }: { initialSchools: string[], initialStats: any }) {
+export default function ClientPage({ initialSchools, initialStats, hasSubmitted }: { initialSchools: string[], initialStats: any, hasSubmitted: boolean }) {
   const [activeView, setActiveView] = useState("view-survey");
-  const [currentPhase, setCurrentPhase] = useState("start");
+  const [currentPhase, setCurrentPhase] = useState(hasSubmitted ? "summary" : "start");
 
   const [demographics, setDemographics] = useState({
     ageRange: "", province: "", district: "", subdistrict: "", school: "",
@@ -199,6 +199,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
         post_score: postScore,
       }]);
       localStorage.setItem("surveySubmitted", "true");
+      document.cookie = "surveySubmitted=true; path=/; max-age=31536000";
       
       router.refresh(); // Refresh Next.js server components in the background
     } catch (err) { console.error("Save failed", err); }
@@ -497,8 +498,8 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
             const post = computeScore(round2Answers);
             const diff = post - pre;
             return (
-              <div className="phase active card">
-                <div className="summary-icon" style={{ color: "var(--ice-500)", display: "flex", justifyContent: "center", marginBottom: 12 }}><Award size={40} /></div>
+              <div className="phase active card" style={{ minHeight: "70vh", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div className="summary-icon" style={{ color: "var(--ice-500)", display: "flex", justifyContent: "center", marginBottom: 12, marginInline: "auto" }}><Award size={40} /></div>
                 <h2 style={{ textAlign: "center" }}>{hasAnswers ? "สรุปผลก่อน-หลังของเธอ" : "ขอบคุณที่ร่วมทำแบบสำรวจ!"}</h2>
                 
                 {hasAnswers ? (
@@ -534,7 +535,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
                   <button type="button" className="btn-primary" onClick={() => handleViewChange("view-stats")} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>ดูสถิติภาพรวมของทุกคน <ArrowRight size={18} /></button>
-                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); setCurrentPhase("start"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
+                  <button type="button" onClick={() => { localStorage.removeItem("surveySubmitted"); document.cookie = "surveySubmitted=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"; setCurrentPhase("start"); setRound1Answers({}); setRound2Answers({}); }} style={{ background: "transparent", border: "1px solid var(--mist)", padding: "12px", borderRadius: "999px", color: "var(--ink-soft)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>ทำแบบสำรวจใหม่อีกครั้ง</button>
                 </div>
               </div>
             );
@@ -735,7 +736,7 @@ export default function ClientPage({ initialSchools, initialStats }: { initialSc
                 </linearGradient>
               </defs>
             </svg>
-            <span style={{ color: "#fff", textShadow: "0 1px 6px rgba(0,0,0,0.25)" }}>ไกลแค่ไหน<br/>ก็ท่วมถึง</span>
+            <span style={{ color: "var(--ice-900)", fontWeight: 800, textShadow: "0 1px 3px rgba(255,255,255,0.6)" }}>ไกลแค่ไหน<br/>ก็ท่วมถึง</span>
           </div>
         </div>
         {renderMainContent()}
