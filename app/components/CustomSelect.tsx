@@ -110,7 +110,7 @@ export default function CustomSelect({
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="พิมพ์เพื่อค้นหา..."
+                placeholder="พิมพ์ชื่อโรงเรียน / สถาบัน..."
                 onKeyDown={(e) => {
                   if (e.key === "Escape") setOpen(false);
                   if (e.key === "Enter") {

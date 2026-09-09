@@ -29,7 +29,6 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 function getHeatColor(count: number, max: number): string {
   if (max === 0 || count === 0) return "#d8edee"; // mist (no data)
   const t = count / max;
-  // ice-50 to ice-700 gradient
   if (t < 0.2) return "#c5e8ec";
   if (t < 0.4) return "#8fd6dd";
   if (t < 0.6) return "#4db5c2";
@@ -50,11 +49,13 @@ export default function ThailandMap({
   }>({ visible: false, x: 0, y: 0, name: "", count: 0 });
   const [selected, setSelected] = useState<string | null>(null);
 
-  // Pan/zoom transform applied to the <g> wrapping the province paths.
-  // The outer <svg viewBox> never changes; we translate+scale the content
-  // inside it, which keeps the tooltip's screen-space math untouched.
+  // Transform applied to the <g> wrapping province paths
   const [view, setView] = useState({ scale: 1, tx: 0, ty: 0 });
-  const [isDragging, setIsDragging] = useState(false);
+  const viewRef = useRef({ scale: 1, tx: 0, ty: 0 });
+  const [isInteracting, setIsInteracting] = useState(false);
+  const [gestureNotice, setGestureNotice] = useState<string | null>(null);
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef({ dragging: false, moved: false, startX: 0, startY: 0, tx: 0, ty: 0 });
 
@@ -65,8 +66,12 @@ export default function ThailandMap({
 
   const maxCount = Math.max(...Object.values(countByProvince), 1);
 
-  // Convert a pointer's screen position into the SVG's own (viewBox) coordinate
-  // space, independent of how much we've zoomed/panned the inner <g>.
+  const updateView = useCallback((next: { scale: number; tx: number; ty: number }) => {
+    viewRef.current = next;
+    setView(next);
+  }, []);
+
+  // Convert screen coordinates to SVG viewBox coordinate space
   const screenToViewBox = useCallback((clientX: number, clientY: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -76,122 +81,219 @@ export default function ThailandMap({
     };
   }, [vbX, vbY, vbW, vbH]);
 
-  const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
-    setView((prev) => {
-      const p = screenToViewBox(clientX, clientY);
-      const newScale = clamp(prev.scale * factor, MIN_SCALE, MAX_SCALE);
-      if (newScale === 1) return { scale: 1, tx: 0, ty: 0 };
-      // Keep the point under the cursor/center fixed while scale changes.
-      const contentX = (p.x - prev.tx) / prev.scale;
-      const contentY = (p.y - prev.ty) / prev.scale;
-      return {
-        scale: newScale,
-        tx: p.x - contentX * newScale,
-        ty: p.y - contentY * newScale,
-      };
-    });
-  }, [screenToViewBox]);
-
-  // React attaches onWheel as a passive listener, so calling preventDefault()
-  // inside a normal React handler silently fails to stop the page/container
-  // from scrolling underneath the map. A native listener registered with
-  // {passive:false} is the only way to actually block that scroll while the
-  // cursor is over the map.
+  // Smooth mouse wheel zoom on desktop
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
+    let wheelTimer: ReturnType<typeof setTimeout> | null = null;
+
     const onNativeWheel = (e: WheelEvent) => {
       e.preventDefault();
-      // Smaller, deltaY-proportional steps (instead of one fixed multiplier
-      // per event) plus the CSS transition on the <g> below are what make
-      // this feel continuous rather than stepped.
-      const factor = Math.pow(1.0016, -e.deltaY);
-      zoomAt(e.clientX, e.clientY, factor);
+      setIsInteracting(true);
+      if (wheelTimer) clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => setIsInteracting(false), 120);
+
+      const factor = Math.pow(1.002, -e.deltaY);
+      const p = screenToViewBox(e.clientX, e.clientY);
+      const prev = viewRef.current;
+      const newScale = clamp(prev.scale * factor, MIN_SCALE, MAX_SCALE);
+
+      if (newScale === 1) {
+        updateView({ scale: 1, tx: 0, ty: 0 });
+        return;
+      }
+
+      const contentX = (p.x - prev.tx) / prev.scale;
+      const contentY = (p.y - prev.ty) / prev.scale;
+      updateView({
+        scale: newScale,
+        tx: p.x - contentX * newScale,
+        ty: p.y - contentY * newScale,
+      });
     };
+
     svg.addEventListener("wheel", onNativeWheel, { passive: false });
-    return () => svg.removeEventListener("wheel", onNativeWheel);
-  }, [zoomAt]);
+    return () => {
+      svg.removeEventListener("wheel", onNativeWheel);
+      if (wheelTimer) clearTimeout(wheelTimer);
+    };
+  }, [screenToViewBox, updateView]);
 
+  // Mobile multi-touch: 2 fingers pinch to zoom & pan smoothly; 1 finger scrolls the webpage!
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    let pinchStartDist = 0;
+    let pinchStartScale = 1;
+    let pinchContentX = 0;
+    let pinchContentY = 0;
+    let isPinching = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        // Multi-finger gesture: intercept and prevent whole-page scroll/zoom
+        e.preventDefault();
+        isPinching = true;
+        setIsInteracting(true);
+
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        pinchStartDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        pinchStartScale = viewRef.current.scale;
+
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+        const p0 = screenToViewBox(midX, midY);
+
+        pinchContentX = (p0.x - viewRef.current.tx) / viewRef.current.scale;
+        pinchContentY = (p0.y - viewRef.current.ty) / viewRef.current.scale;
+      } else if (e.touches.length === 1) {
+        // Single finger: allow default vertical page scrolling!
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length >= 2 && isPinching && pinchStartDist > 0) {
+        e.preventDefault();
+
+        const t0 = e.touches[0];
+        const t1 = e.touches[1];
+        const currentDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        const factor = currentDist / pinchStartDist;
+        const newScale = clamp(pinchStartScale * factor, MIN_SCALE, MAX_SCALE);
+
+        const midX = (t0.clientX + t1.clientX) / 2;
+        const midY = (t0.clientY + t1.clientY) / 2;
+        const p = screenToViewBox(midX, midY);
+
+        const newTx = newScale === 1 ? 0 : p.x - pinchContentX * newScale;
+        const newTy = newScale === 1 ? 0 : p.y - pinchContentY * newScale;
+
+        updateView({ scale: newScale, tx: newTx, ty: newTy });
+      } else if (e.touches.length === 1 && viewRef.current.scale > 1) {
+        // If user drags horizontally when zoomed in, show friendly tip without blocking scroll
+        const dx = Math.abs(e.touches[0].clientX - touchStartX);
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        if (dx > 25 && dx > dy * 1.4) {
+          setGestureNotice("ใช้ 2 นิ้วเพื่อเลื่อนแผนที่");
+          if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+          noticeTimerRef.current = setTimeout(() => setGestureNotice(null), 2000);
+        }
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2 && isPinching) {
+        isPinching = false;
+        setIsInteracting(false);
+        pinchStartDist = 0;
+      }
+    };
+
+    svg.addEventListener("touchstart", onTouchStart, { passive: false });
+    svg.addEventListener("touchmove", onTouchMove, { passive: false });
+    svg.addEventListener("touchend", onTouchEnd, { passive: false });
+    svg.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+    return () => {
+      svg.removeEventListener("touchstart", onTouchStart);
+      svg.removeEventListener("touchmove", onTouchMove);
+      svg.removeEventListener("touchend", onTouchEnd);
+      svg.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [screenToViewBox, updateView]);
+
+  // Desktop double-click zoom
   const handleDoubleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
-    zoomAt(e.clientX, e.clientY, 1.6);
-  }, [zoomAt]);
+    setIsInteracting(false);
+    const p = screenToViewBox(e.clientX, e.clientY);
+    const prev = viewRef.current;
+    const newScale = clamp(prev.scale * 1.6, MIN_SCALE, MAX_SCALE);
+    if (newScale === 1) {
+      updateView({ scale: 1, tx: 0, ty: 0 });
+      return;
+    }
+    const contentX = (p.x - prev.tx) / prev.scale;
+    const contentY = (p.y - prev.ty) / prev.scale;
+    updateView({
+      scale: newScale,
+      tx: p.x - contentX * newScale,
+      ty: p.y - contentY * newScale,
+    });
+  }, [screenToViewBox, updateView]);
 
-  const resetView = useCallback(() => setView({ scale: 1, tx: 0, ty: 0 }), []);
+  // Reset & button zoom
+  const resetView = useCallback(() => {
+    setIsInteracting(false);
+    updateView({ scale: 1, tx: 0, ty: 0 });
+  }, [updateView]);
+
   const zoomButton = useCallback((factor: number) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
-    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
-  }, [zoomAt]);
-
-  const pointersRef = useRef<Map<number, { x: number, y: number }>>(new Map());
-  const initialPinchDistRef = useRef<number | null>(null);
-  const initialScaleRef = useRef<number>(1);
-
-  const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    (e.target as Element).setPointerCapture(e.pointerId);
-    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (pointersRef.current.size === 2) {
-      const pts = Array.from(pointersRef.current.values());
-      initialPinchDistRef.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      initialScaleRef.current = view.scale;
-    } else if (pointersRef.current.size === 1) {
-      if (view.scale <= 1) return;
-      dragRef.current = { dragging: true, moved: false, startX: e.clientX, startY: e.clientY, tx: view.tx, ty: view.ty };
-      setIsDragging(true);
-    }
-  }, [view.scale, view.tx, view.ty]);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    if (pointersRef.current.has(e.pointerId)) {
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    }
-
-    if (pointersRef.current.size === 2 && initialPinchDistRef.current) {
-      const pts = Array.from(pointersRef.current.values());
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      const factor = dist / initialPinchDistRef.current;
-      
-      const cx = (pts[0].x + pts[1].x) / 2;
-      const cy = (pts[0].y + pts[1].y) / 2;
-      
-      // Compute zoom
-      const p = screenToViewBox(cx, cy);
-      const newScale = clamp(initialScaleRef.current * factor, MIN_SCALE, MAX_SCALE);
-      if (newScale !== view.scale) {
-        const contentX = (p.x - view.tx) / view.scale;
-        const contentY = (p.y - view.ty) / view.scale;
-        setView({
-          scale: newScale,
-          tx: p.x - contentX * newScale,
-          ty: p.y - contentY * newScale,
-        });
-      }
+    setIsInteracting(false);
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const p = screenToViewBox(cx, cy);
+    const prev = viewRef.current;
+    const newScale = clamp(prev.scale * factor, MIN_SCALE, MAX_SCALE);
+    if (newScale === 1) {
+      updateView({ scale: 1, tx: 0, ty: 0 });
       return;
     }
+    const contentX = (p.x - prev.tx) / prev.scale;
+    const contentY = (p.y - prev.ty) / prev.scale;
+    updateView({
+      scale: newScale,
+      tx: p.x - contentX * newScale,
+      ty: p.y - contentY * newScale,
+    });
+  }, [screenToViewBox, updateView]);
 
-    if (!dragRef.current.dragging || pointersRef.current.size !== 1) return;
+  // Desktop mouse drag pan (only active when zoomed in and using mouse)
+  const handlePointerDown = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    if (viewRef.current.scale <= 1) return;
+    (e.target as Element).setPointerCapture(e.pointerId);
+    dragRef.current = {
+      dragging: true,
+      moved: false,
+      startX: e.clientX,
+      startY: e.clientY,
+      tx: viewRef.current.tx,
+      ty: viewRef.current.ty,
+    };
+    setIsInteracting(true);
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.pointerType !== "mouse" || !dragRef.current.dragging) return;
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragRef.current.moved = true;
-    setView((prev) => ({
-      ...prev,
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragRef.current.moved = true;
+    }
+    updateView({
+      scale: viewRef.current.scale,
       tx: dragRef.current.tx + dx * (vbW / rect.width),
       ty: dragRef.current.ty + dy * (vbH / rect.height),
-    }));
-  }, [vbW, vbH, screenToViewBox, view.scale, view.tx, view.ty]);
+    });
+  }, [vbW, vbH, updateView]);
 
   const handlePointerUp = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
-    pointersRef.current.delete(e.pointerId);
-    if (pointersRef.current.size < 2) {
-      initialPinchDistRef.current = null;
-    }
-    if (pointersRef.current.size === 0) {
-      dragRef.current.dragging = false;
-      setIsDragging(false);
-    }
+    if (e.pointerType !== "mouse" || !dragRef.current.dragging) return;
+    dragRef.current.dragging = false;
+    setIsInteracting(false);
+    try {
+      (e.target as Element).releasePointerCapture(e.pointerId);
+    } catch {}
   }, []);
 
   const handleMouseEnter = useCallback(
@@ -218,7 +320,6 @@ export default function ThailandMap({
 
   const handleClick = useCallback(
     (prov: Province) => {
-      // A click that ends a drag (panning) shouldn't also toggle selection.
       if (dragRef.current.moved) {
         dragRef.current.moved = false;
         return;
@@ -232,15 +333,17 @@ export default function ThailandMap({
 
   const handleTouchStart = useCallback(
     (e: React.TouchEvent, prov: Province) => {
-      const touch = e.touches[0];
-      const count = countByProvince[prov.name] || 0;
-      setTooltip({
-        visible: true,
-        x: touch.clientX,
-        y: touch.clientY,
-        name: prov.name,
-        count,
-      });
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        const count = countByProvince[prov.name] || 0;
+        setTooltip({
+          visible: true,
+          x: touch.clientX,
+          y: touch.clientY,
+          name: prov.name,
+          count,
+        });
+      }
     },
     [countByProvince]
   );
@@ -262,7 +365,13 @@ export default function ThailandMap({
       <svg
         ref={svgRef}
         viewBox={viewBox}
-        style={{ width: "100%", height: "auto", display: "block", cursor: view.scale > 1 ? "grab" : "default", touchAction: "none" }}
+        style={{
+          width: "100%",
+          height: "auto",
+          display: "block",
+          cursor: view.scale > 1 ? "grab" : "default",
+          touchAction: "pan-y",
+        }}
         aria-label="แผนที่จังหวัดไทย ซูมและลากเพื่อดูรายละเอียดได้"
         onDoubleClick={handleDoubleClick}
         onPointerDown={handlePointerDown}
@@ -272,7 +381,10 @@ export default function ThailandMap({
       >
         <g
           transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}
-          style={{ transition: isDragging ? "none" : "transform 0.18s cubic-bezier(0.22, 1, 0.36, 1)" }}
+          style={{
+            transition: isInteracting ? "none" : "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            transformOrigin: "0 0",
+          }}
         >
           {provinces.map((prov) => {
             const count = countByProvince[prov.name] || 0;
@@ -291,9 +403,9 @@ export default function ThailandMap({
                 onMouseLeave={handleMouseLeave}
                 onClick={() => handleClick(prov)}
                 onTouchStart={(e) => handleTouchStart(e, prov)}
-                onTouchEnd={() =>
-                  setTimeout(() => setTooltip((p) => ({ ...p, visible: false })), 2000)
-                }
+                onTouchEnd={() => {
+                  setTimeout(() => setTooltip((p) => ({ ...p, visible: false })), 2500);
+                }}
                 aria-label={`${prov.name}: ${count} คน`}
                 aria-pressed={isSelected}
                 role="button"
@@ -306,6 +418,11 @@ export default function ThailandMap({
           })}
         </g>
       </svg>
+
+      {/* Floating gesture tip */}
+      <div className="map-gesture-hint">
+        {gestureNotice ? `✋ ${gestureNotice}` : "💡 แตะเพื่อดูจังหวัด • ใช้ 2 นิ้วเพื่อซูมและเลื่อน"}
+      </div>
 
       {/* Legend */}
       <div
