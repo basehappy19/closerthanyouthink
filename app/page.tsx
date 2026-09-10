@@ -58,6 +58,12 @@ export default async function Page() {
           initialStats.schoolsByProvince[prov][r.school].count += 1;
         }
       });
+      const allUnique = [
+        ...knownSchools,
+        ...Object.keys(initialStats.bySchool || {}),
+        ...statsData.map((r: any) => r.school && String(r.school).trim()).filter(Boolean)
+      ];
+      knownSchools = [...new Set(allUnique)].sort((a, b) => a.localeCompare(b, "th"));
     }
   } catch (err) {}
 

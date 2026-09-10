@@ -113,6 +113,62 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
     return dists[demographics.district].sort();
   }, [demographics.province, demographics.district]);
 
+  const schoolOptions = useMemo(() => {
+    const set = new Set<string>();
+    (knownSchools || []).forEach((s) => {
+      const trimmed = s?.trim();
+      if (trimmed) set.add(trimmed);
+    });
+    if (stats?.bySchool) {
+      Object.keys(stats.bySchool).forEach((s) => {
+        const trimmed = s?.trim();
+        if (trimmed) set.add(trimmed);
+      });
+    }
+    if (stats?.scoreBySchool) {
+      Object.keys(stats.scoreBySchool).forEach((s) => {
+        const trimmed = s?.trim();
+        if (trimmed) set.add(trimmed);
+      });
+    }
+    if (stats?.schoolsByProvince) {
+      Object.values(stats.schoolsByProvince).forEach((provSchools: any) => {
+        if (provSchools && typeof provSchools === "object") {
+          Object.keys(provSchools).forEach((s) => {
+            const trimmed = s?.trim();
+            if (trimmed) set.add(trimmed);
+          });
+        }
+      });
+    }
+
+    const all = Array.from(set).filter(Boolean);
+
+    // If province is selected, prioritize schools from that province at the top
+    if (demographics.province && stats?.schoolsByProvince?.[demographics.province]) {
+      const provSchoolNames = new Set(
+        Object.keys(stats.schoolsByProvince[demographics.province]).map((s) => s.trim())
+      );
+      const provList = all.filter((s) => provSchoolNames.has(s)).sort((a, b) => {
+        const countA = stats?.schoolsByProvince?.[demographics.province]?.[a]?.count || stats?.bySchool?.[a] || 0;
+        const countB = stats?.schoolsByProvince?.[demographics.province]?.[b]?.count || stats?.bySchool?.[b] || 0;
+        return countB - countA || a.localeCompare(b, "th");
+      });
+      const otherList = all.filter((s) => !provSchoolNames.has(s)).sort((a, b) => {
+        const countA = stats?.bySchool?.[a] || 0;
+        const countB = stats?.bySchool?.[b] || 0;
+        return countB - countA || a.localeCompare(b, "th");
+      });
+      return [...provList, ...otherList];
+    }
+
+    return all.sort((a, b) => {
+      const countA = stats?.bySchool?.[a] || 0;
+      const countB = stats?.bySchool?.[b] || 0;
+      return countB - countA || a.localeCompare(b, "th");
+    });
+  }, [knownSchools, stats, demographics.province]);
+
   const isBkk = demographics.province === "กรุงเทพมหานคร";
   const districtLabel = isBkk ? "เขต" : "อำเภอ";
   const subdistrictLabel = isBkk ? "แขวง" : "ตำบล";
@@ -268,6 +324,12 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
     setStats(initialStats);
   }, [initialStats]);
 
+  useEffect(() => {
+    if (initialSchools && initialSchools.length > 0) {
+      setKnownSchools((prev) => [...new Set([...prev, ...initialSchools.map((s) => s.trim()).filter(Boolean)])]);
+    }
+  }, [initialSchools]);
+
   const refreshFullStats = useCallback(async () => {
     try {
       const { data: statsData, error } = await supabase.from("survey_responses").select("*");
@@ -320,6 +382,12 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
             newStats.schoolsByProvince[prov][r.school].count += 1;
           }
         });
+        const liveSchools = statsData
+          .map((r: any) => r.school && String(r.school).trim())
+          .filter(Boolean) as string[];
+        if (liveSchools.length > 0) {
+          setKnownSchools((prev) => [...new Set([...prev, ...liveSchools])]);
+        }
         setStats(newStats);
       }
     } catch (err) {
@@ -403,6 +471,10 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
       localStorage.removeItem("survey_draft");
       document.cookie = "surveySubmitted=true; path=/; max-age=31536000";
       setRestoredNotification(false);
+      if (demographics.school && demographics.school.trim()) {
+        const trimmed = demographics.school.trim();
+        setKnownSchools((prev) => prev.includes(trimmed) ? prev : [...prev, trimmed]);
+      }
       
       router.refresh(); // Refresh Next.js server components in the background
     } catch (err) { console.error("Save failed", err); }
@@ -1204,7 +1276,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
                 <div className="field" style={{ animation: "fadeIn 0.35s ease" }}>
                   <label>โรงเรียน / สถานศึกษา <span className="hint">(พิมพ์ หรือเลือกจากรายการ)</span></label>
                   <CustomSelect
-                    options={knownSchools}
+                    options={schoolOptions}
                     value={demographics.school}
                     onChange={(v) => setDemographics({ ...demographics, school: v })}
                     placeholder="เช่น โรงเรียนภูเขียว"
