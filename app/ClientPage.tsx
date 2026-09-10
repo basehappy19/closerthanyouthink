@@ -117,7 +117,6 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
   const [showAllSchools, setShowAllSchools] = useState(false);
   const [openProvinces, setOpenProvinces] = useState<Record<string, boolean>>({});
   const [schoolTabMode, setSchoolTabMode] = useState<"province" | "all">("all");
-  const [ageSortMode, setAgeSortMode] = useState<"age" | "count">("age");
   const schoolInputRef = useRef<HTMLInputElement>(null);
 
   const districtOptions = useMemo(() => {
@@ -542,13 +541,9 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
     const entries = Object.entries(cleaned);
     const sorted = entries
       .sort((a, b) => {
-        if (ageSortMode === "age") {
-          const wa = AGE_WEIGHTS[a[0]] ?? 0;
-          const wb = AGE_WEIGHTS[b[0]] ?? 0;
-          return wb - wa;
-        } else {
-          return b[1] - a[1];
-        }
+        const wa = AGE_WEIGHTS[a[0]] ?? 0;
+        const wb = AGE_WEIGHTS[b[0]] ?? 0;
+        return wb - wa;
       })
       .slice(0, limit);
 
@@ -899,16 +894,16 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
             const postWidth = Math.min(100, Math.max(5, (avgPost / 5) * 100));
 
             return (
-              <div className="school-compare-item" key={schoolName}>
+              <div className="school-compare-item compact" key={schoolName}>
                 <div className="school-compare-header">
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <School size={15} color="var(--ice-700)" />
-                    <span className="school-name-text">{schoolName}</span>
+                  <div className="school-compare-left">
+                    <School size={13} color="var(--ice-700)" style={{ flexShrink: 0 }} />
+                    <span className="school-name-text" title={schoolName}>{schoolName}</span>
                     <span className="school-count-badge">({s.count} คน)</span>
                   </div>
-                  <div className="school-diff-badge">
-                    <TrendingUp size={13} />
-                    <span>{diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)} คะแนน</span>
+                  <div className="school-diff-badge" title="คะแนนที่พัฒนาขึ้น">
+                    <TrendingUp size={11} />
+                    <span>{diff >= 0 ? `+${diff.toFixed(2)}` : diff.toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -920,7 +915,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
                       <div className="school-bar-fill-pre" style={{ width: `${preWidth}%` }} />
                     </div>
                     <span className="school-bar-score" style={{ color: "var(--ice-700)" }}>
-                      {avgPre.toFixed(2)}
+                      {avgPre.toFixed(1)}
                     </span>
                   </div>
 
@@ -931,7 +926,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
                       <div className="school-bar-fill-post" style={{ width: `${postWidth}%` }} />
                     </div>
                     <span className="school-bar-score" style={{ color: "var(--good)" }}>
-                      {avgPost.toFixed(2)}
+                      {avgPost.toFixed(1)}
                     </span>
                   </div>
                 </div>
@@ -1620,28 +1615,9 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
 
                 {/* 3. ช่วงอายุของผู้ตอบ */}
                 <div className="stat-card tint-a">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
-                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                      <Users size={16}/> ช่วงอายุของผู้ตอบ
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setAgeSortMode((prev) => prev === "age" ? "count" : "age")}
-                      style={{
-                        fontSize: 11,
-                        padding: "2px 8px",
-                        borderRadius: 999,
-                        border: "1px solid rgba(15,92,107,0.18)",
-                        background: "rgba(255,255,255,0.75)",
-                        cursor: "pointer",
-                        color: "var(--ice-700)",
-                        fontWeight: 600,
-                      }}
-                      title="คลิกเพื่อสลับการเรียงลำดับ"
-                    >
-                      {ageSortMode === "age" ? "เรียงตามอายุ (มาก → น้อย)" : "เรียงตามคน (มาก → น้อย)"}
-                    </button>
-                  </div>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Users size={16}/> ช่วงอายุของผู้ตอบ
+                  </h3>
                   {renderBarChart(stats.byAge || {}, 7)}
                 </div>
 
