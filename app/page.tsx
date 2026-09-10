@@ -3,6 +3,15 @@ import { supabase } from "@/lib/supabase";
 
 export const revalidate = 0;
 
+export function normalizeAgeRange(rawAge: string): string {
+  if (!rawAge) return "";
+  const s = String(rawAge).trim().replace(/-/g, "–");
+  if (s === "15–18 ปี") return "16–18 ปี";
+  if (s === "19–22 ปี") return "19–25 ปี";
+  if (s === "ต่ำกว่า 15 ปี" || s === "ต่ำกว่า 15") return "12–15 ปี";
+  return s;
+}
+
 export default async function Page() {
   let knownSchools: string[] = [];
   try {
@@ -38,7 +47,12 @@ export default async function Page() {
           initialStats.scoreByProvince[r.province].post += r.post_score;
           initialStats.scoreByProvince[r.province].count += 1;
         }
-        if (r.age_range) initialStats.byAge[r.age_range] = (initialStats.byAge[r.age_range] || 0) + 1;
+        if (r.age_range) {
+          const normAge = normalizeAgeRange(r.age_range);
+          if (normAge) {
+            initialStats.byAge[normAge] = (initialStats.byAge[normAge] || 0) + 1;
+          }
+        }
         if (r.school) {
           initialStats.bySchool[r.school] = (initialStats.bySchool[r.school] || 0) + 1;
           if (!initialStats.scoreBySchool[r.school]) initialStats.scoreBySchool[r.school] = { pre: 0, post: 0, count: 0 };

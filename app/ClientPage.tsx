@@ -20,6 +20,24 @@ type AddressTree = Record<string, Record<string, string[]>>;
 const addressTree = addressDataRaw as AddressTree;
 const PROVINCES = Object.keys(addressTree).sort();
 
+export function normalizeAgeRange(rawAge: string): string {
+  if (!rawAge) return "";
+  const s = String(rawAge).trim().replace(/-/g, "–");
+  if (s === "15–18 ปี") return "16–18 ปี";
+  if (s === "19–22 ปี") return "19–25 ปี";
+  if (s === "ต่ำกว่า 15 ปี" || s === "ต่ำกว่า 15") return "12–15 ปี";
+  return s;
+}
+
+const AGE_WEIGHTS: Record<string, number> = {
+  "มากกว่า 40 ปี": 60,
+  "26–40 ปี": 50,
+  "19–25 ปี": 40,
+  "16–18 ปี": 30,
+  "12–15 ปี": 20,
+  "ต่ำกว่า 12 ปี": 10,
+};
+
 const KNOWLEDGE_ITEMS = [
   { field: "k1", text: "น้ำแข็งขั้วโลกละลายไม่ส่งผลกระทบต่อประเทศไทยเลย เพราะอยู่ไกลกันมาก", correct: "ผิด" },
   { field: "k2", text: "กรุงเทพมหานครมีความสูงเฉลี่ยเหนือระดับน้ำทะเลไม่ถึง 2 เมตร", correct: "ถูก" },
@@ -99,6 +117,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
   const [showAllSchools, setShowAllSchools] = useState(false);
   const [openProvinces, setOpenProvinces] = useState<Record<string, boolean>>({});
   const [schoolTabMode, setSchoolTabMode] = useState<"province" | "all">("all");
+  const [ageSortMode, setAgeSortMode] = useState<"age" | "count">("age");
   const schoolInputRef = useRef<HTMLInputElement>(null);
 
   const districtOptions = useMemo(() => {
@@ -359,7 +378,10 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
             newStats.scoreByProvince[r.province].count += 1;
           }
           if (r.age_range) {
-            newStats.byAge[r.age_range] = (newStats.byAge[r.age_range] || 0) + 1;
+            const normAge = normalizeAgeRange(r.age_range);
+            if (normAge) {
+              newStats.byAge[normAge] = (newStats.byAge[normAge] || 0) + 1;
+            }
           }
           if (r.school) {
             newStats.bySchool[r.school] = (newStats.bySchool[r.school] || 0) + 1;
@@ -508,9 +530,29 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
 
   const progressStep = ({ demographics: 1, "questions-r1": 2, media: 3, "questions-r2": 4 } as any)[currentPhase] || 1;
 
-  const renderBarChart = (data: Record<string, number>, limit = 6) => {
-    const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, limit);
-    const max = sorted.length ? sorted[0][1] : 1;
+  const renderBarChart = (data: Record<string, number>, limit = 7) => {
+    const cleaned: Record<string, number> = {};
+    Object.entries(data).forEach(([k, v]) => {
+      const norm = normalizeAgeRange(k);
+      if (norm) {
+        cleaned[norm] = (cleaned[norm] || 0) + v;
+      }
+    });
+
+    const entries = Object.entries(cleaned);
+    const sorted = entries
+      .sort((a, b) => {
+        if (ageSortMode === "age") {
+          const wa = AGE_WEIGHTS[a[0]] ?? 0;
+          const wb = AGE_WEIGHTS[b[0]] ?? 0;
+          return wb - wa;
+        } else {
+          return b[1] - a[1];
+        }
+      })
+      .slice(0, limit);
+
+    const max = Math.max(1, ...sorted.map(([_, v]) => v));
     return sorted.map(([k, v]) => (
       <div className="bar-row" key={k}>
         <div className="bar-row-top"><span>{k}</span><span className="bar-count">{v}</span></div>
@@ -1578,9 +1620,28 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
 
                 {/* 3. ช่วงอายุของผู้ตอบ */}
                 <div className="stat-card tint-a">
-                  <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Users size={16}/> ช่วงอายุของผู้ตอบ
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                      <Users size={16}/> ช่วงอายุของผู้ตอบ
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => setAgeSortMode((prev) => prev === "age" ? "count" : "age")}
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(15,92,107,0.18)",
+                        background: "rgba(255,255,255,0.75)",
+                        cursor: "pointer",
+                        color: "var(--ice-700)",
+                        fontWeight: 600,
+                      }}
+                      title="คลิกเพื่อสลับการเรียงลำดับ"
+                    >
+                      {ageSortMode === "age" ? "เรียงตามอายุ (มาก → น้อย)" : "เรียงตามคน (มาก → น้อย)"}
+                    </button>
+                  </div>
                   {renderBarChart(stats.byAge || {}, 7)}
                 </div>
 
