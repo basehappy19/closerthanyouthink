@@ -21,6 +21,7 @@ export default async function Page() {
     bySchool: {}, 
     scoreByProvince: {},
     scoreBySchool: {},
+    schoolsByProvince: {},
   };
   
   try {
@@ -44,6 +45,17 @@ export default async function Page() {
           initialStats.scoreBySchool[r.school].pre += r.pre_score;
           initialStats.scoreBySchool[r.school].post += r.post_score;
           initialStats.scoreBySchool[r.school].count += 1;
+
+          const prov = (r.province && String(r.province).trim()) ? String(r.province).trim() : "ไม่ระบุจังหวัด";
+          if (!initialStats.schoolsByProvince[prov]) {
+            initialStats.schoolsByProvince[prov] = {};
+          }
+          if (!initialStats.schoolsByProvince[prov][r.school]) {
+            initialStats.schoolsByProvince[prov][r.school] = { pre: 0, post: 0, count: 0 };
+          }
+          initialStats.schoolsByProvince[prov][r.school].pre += r.pre_score;
+          initialStats.schoolsByProvince[prov][r.school].post += r.post_score;
+          initialStats.schoolsByProvince[prov][r.school].count += 1;
         }
       });
     }

@@ -11,6 +11,7 @@ import {
   FileText, BarChart2, BookOpen, Info, PlayCircle, Image as ImageIcon, CheckCircle,
   Smile, SmilePlus, Frown, Annoyed, Meh, Globe, MapPin, Users, Award, Shield, Key, Video,
   Newspaper, ClipboardList, Lock, Scale, ArrowRight, ArrowLeft, Target, School, TrendingUp,
+  ChevronDown, ChevronUp, Search,
 } from "lucide-react";
 
 const MOOD_SCALE_ICONS = [Frown, Annoyed, Meh, Smile, SmilePlus];
@@ -96,6 +97,8 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
   const [formIncompleteMsg, setFormIncompleteMsg] = useState("");
   const [knownSchools, setKnownSchools] = useState<string[]>(initialSchools);
   const [showAllSchools, setShowAllSchools] = useState(false);
+  const [openProvinces, setOpenProvinces] = useState<Record<string, boolean>>({});
+  const [schoolTabMode, setSchoolTabMode] = useState<"province" | "all">("all");
   const schoolInputRef = useRef<HTMLInputElement>(null);
 
   const districtOptions = useMemo(() => {
@@ -278,6 +281,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
           bySchool: {},
           scoreByProvince: {},
           scoreBySchool: {},
+          schoolsByProvince: {},
         };
         statsData.forEach((r: any) => {
           newStats.total++;
@@ -303,6 +307,17 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
             newStats.scoreBySchool[r.school].pre += Number(r.pre_score) || 0;
             newStats.scoreBySchool[r.school].post += Number(r.post_score) || 0;
             newStats.scoreBySchool[r.school].count += 1;
+
+            const prov = (r.province && String(r.province).trim()) ? String(r.province).trim() : "ไม่ระบุจังหวัด";
+            if (!newStats.schoolsByProvince[prov]) {
+              newStats.schoolsByProvince[prov] = {};
+            }
+            if (!newStats.schoolsByProvince[prov][r.school]) {
+              newStats.schoolsByProvince[prov][r.school] = { pre: 0, post: 0, count: 0 };
+            }
+            newStats.schoolsByProvince[prov][r.school].pre += Number(r.pre_score) || 0;
+            newStats.schoolsByProvince[prov][r.school].post += Number(r.post_score) || 0;
+            newStats.schoolsByProvince[prov][r.school].count += 1;
           }
         });
         setStats(newStats);
@@ -451,6 +466,289 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
         </div>
       );
     });
+  };
+
+  const renderSchoolStatsByProvince = (
+    schoolsByProvince: Record<string, Record<string, { pre: number; post: number; count: number }>> = {},
+    fallbackScores: Record<string, { pre: number; post: number; count: number }> = {},
+    fallbackCounts: Record<string, number> = {}
+  ) => {
+    let provinceData: Record<string, Record<string, { pre: number; post: number; count: number }>> = { ...(schoolsByProvince || {}) };
+    const hasData = Object.keys(provinceData).length > 0 &&
+      Object.values(provinceData).some((schs) => schs && Object.keys(schs).length > 0);
+
+    if (!hasData) {
+      if (fallbackScores && Object.keys(fallbackScores).length > 0) {
+        provinceData["ทั่วไป / ไม่ระบุจังหวัด"] = fallbackScores;
+      } else {
+        return <p className="muted" style={{ padding: "16px 0", textAlign: "center" }}>ยังไม่มีข้อมูลโรงเรียนที่ตอบแบบสำรวจ</p>;
+      }
+    }
+
+    type SchoolItem = {
+      name: string;
+      province: string;
+      count: number;
+      pre: number;
+      post: number;
+      avgPre: number;
+      avgPost: number;
+      diff: number;
+    };
+
+    type ProvinceGroup = {
+      province: string;
+      schools: SchoolItem[];
+      totalCount: number;
+      avgPost: number;
+      avgGain: number;
+    };
+
+    const provinceGroups: ProvinceGroup[] = Object.entries(provinceData).map(([provName, schs]) => {
+      const schools: SchoolItem[] = Object.entries(schs || {})
+        .filter(([_, s]) => s && s.count > 0)
+        .map(([schName, s]) => {
+          const avgPre = s.count ? s.pre / s.count : 0;
+          const avgPost = s.count ? s.post / s.count : 0;
+          const diff = avgPost - avgPre;
+          return {
+            name: schName,
+            province: provName,
+            count: s.count,
+            pre: s.pre,
+            post: s.post,
+            avgPre,
+            avgPost,
+            diff,
+          };
+        })
+        .sort((a, b) => b.count - a.count || b.avgPost - a.avgPost);
+
+      const totalCount = schools.reduce((sum, s) => sum + s.count, 0);
+      const totalPost = schools.reduce((sum, s) => sum + s.post, 0);
+      const totalPre = schools.reduce((sum, s) => sum + s.pre, 0);
+      const avgPost = totalCount ? totalPost / totalCount : 0;
+      const avgGain = totalCount ? (totalPost - totalPre) / totalCount : 0;
+
+      return {
+        province: provName,
+        schools,
+        totalCount,
+        avgPost,
+        avgGain,
+      };
+    })
+    .filter((g) => g.schools.length > 0)
+    .sort((a, b) => b.totalCount - a.totalCount);
+
+    if (provinceGroups.length === 0) {
+      return <p className="muted" style={{ padding: "16px 0", textAlign: "center" }}>ยังไม่มีข้อมูลโรงเรียนที่ตอบแบบสำรวจ</p>;
+    }
+
+    const allSchoolsNationwide: SchoolItem[] = provinceGroups
+      .flatMap((g) => g.schools)
+      .sort((a, b) => b.count - a.count || b.avgPost - a.avgPost);
+
+    const totalSchoolCount = allSchoolsNationwide.length;
+    const maxCount = Math.max(1, ...allSchoolsNationwide.map((s) => s.count));
+
+    const isProvinceOpen = (provName: string, index: number) => {
+      if (openProvinces[provName] !== undefined) return openProvinces[provName];
+      return index === 0;
+    };
+
+    const toggleProvince = (provName: string, index: number) => {
+      const current = isProvinceOpen(provName, index);
+      setOpenProvinces((prev) => ({ ...prev, [provName]: !current }));
+    };
+
+    const expandAll = () => {
+      const next: Record<string, boolean> = {};
+      provinceGroups.forEach((g) => { next[g.province] = true; });
+      setOpenProvinces(next);
+    };
+
+    const collapseAll = () => {
+      const next: Record<string, boolean> = {};
+      provinceGroups.forEach((g) => { next[g.province] = false; });
+      setOpenProvinces(next);
+    };
+
+    return (
+      <div className="school-stats-container">
+        {/* Controls bar */}
+        <div className="school-stats-toolbar">
+          <div className="school-stats-tabs">
+            <button
+              type="button"
+              className={`school-tab-btn ${schoolTabMode === "all" ? "active" : ""}`}
+              onClick={() => setSchoolTabMode("all")}
+            >
+              <School size={13} /> ทุกโรงเรียนทั่วประเทศ ({totalSchoolCount})
+            </button>
+            <button
+              type="button"
+              className={`school-tab-btn ${schoolTabMode === "province" ? "active" : ""}`}
+              onClick={() => setSchoolTabMode("province")}
+            >
+              <MapPin size={13} /> แยกตามจังหวัด ({provinceGroups.length})
+            </button>
+          </div>
+
+          {schoolTabMode === "province" && (
+            <div className="school-expand-btns">
+              <button type="button" onClick={expandAll} className="btn-mini">
+                ขยายทั้งหมด
+              </button>
+              <button type="button" onClick={collapseAll} className="btn-mini">
+                หุบทั้งหมด
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Tab 1: Nationwide all schools (default) */}
+        {schoolTabMode === "all" && (
+          <div className="province-schools-grid nationwide-grid">
+            {allSchoolsNationwide.map((sch, idx) => {
+              const barPct = Math.min(100, Math.max(8, (sch.count / maxCount) * 100));
+              const diffText = sch.diff >= 0 ? `+${sch.diff.toFixed(2)}` : sch.diff.toFixed(2);
+              const rankClass = idx === 0 ? "rank-gold" : idx === 1 ? "rank-silver" : idx === 2 ? "rank-bronze" : "rank-normal";
+
+              return (
+                <div className="province-school-card compact" key={`${sch.province}-${sch.name}`}>
+                  <div className="sch-compact-row">
+                    <div className="sch-compact-left">
+                      <span className={`sch-rank-badge ${rankClass}`}>#{idx + 1}</span>
+                      <div className="sch-name-wrap">
+                        <span className="sch-name" title={sch.name}>{sch.name}</span>
+                        {sch.province && (
+                          <span className="sch-prov-tag">
+                            <MapPin size={9} style={{ marginRight: 2 }} /> {sch.province}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="sch-compact-right">
+                      <span className="sch-count-tag">{sch.count} คน</span>
+                      <div className={`sch-score-chip gain ${sch.diff >= 0 ? "positive" : "negative"}`} title="ยอดคะแนนที่เพิ่มขึ้น">
+                        <TrendingUp size={11} />
+                        <span className="val">{diffText}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sch-compact-bar-row">
+                    <span className="sch-bar-sub">
+                      ก่อน <b>{sch.avgPre.toFixed(1)}</b> → หลัง <b style={{ color: "var(--good)" }}>{sch.avgPost.toFixed(1)}</b>
+                    </span>
+                    <div className="sch-bar-track">
+                      <div
+                        className="sch-bar-fill"
+                        style={{ width: `${barPct}%` }}
+                        title={`${sch.name}: ${sch.count} คน`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Tab 2: Grouped by Province */}
+        {schoolTabMode === "province" && (
+          <div className="province-accordion-list">
+            {provinceGroups.map((group, groupIndex) => {
+              const isOpen = isProvinceOpen(group.province, groupIndex);
+              const gainSign = group.avgGain >= 0 ? `+${group.avgGain.toFixed(2)}` : group.avgGain.toFixed(2);
+
+              return (
+                <div className={`province-accordion-card ${isOpen ? "open" : ""}`} key={group.province}>
+                  <button
+                    type="button"
+                    className="province-accordion-header"
+                    onClick={() => toggleProvince(group.province, groupIndex)}
+                    aria-expanded={isOpen}
+                  >
+                    <div className="prov-header-left">
+                      <div className="prov-icon-wrap">
+                        <MapPin size={14} />
+                      </div>
+                      <div className="prov-title-wrap">
+                        <span className="prov-name">{group.province}</span>
+                        <div className="prov-meta-tags">
+                          <span className="prov-badge count">{group.totalCount} คน</span>
+                          <span className="prov-badge schools">{group.schools.length} โรงเรียน</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="prov-header-right">
+                      <div className="prov-score-summary">
+                        <span className={`prov-gain-score ${group.avgGain >= 0 ? "positive" : "negative"}`}>
+                          <TrendingUp size={11} /> {gainSign}
+                        </span>
+                      </div>
+                      <div className={`prov-chevron ${isOpen ? "open" : ""}`}>
+                        <ChevronDown size={16} />
+                      </div>
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="province-accordion-content">
+                      <div className="province-schools-grid">
+                        {group.schools.map((sch, schIdx) => {
+                          const barPct = Math.min(100, Math.max(8, (sch.count / maxCount) * 100));
+                          const diffText = sch.diff >= 0 ? `+${sch.diff.toFixed(2)}` : sch.diff.toFixed(2);
+                          const rankClass = schIdx === 0 ? "rank-gold" : schIdx === 1 ? "rank-silver" : schIdx === 2 ? "rank-bronze" : "rank-normal";
+
+                          return (
+                            <div className="province-school-card compact" key={sch.name}>
+                              <div className="sch-compact-row">
+                                <div className="sch-compact-left">
+                                  <span className={`sch-rank-badge ${rankClass}`}>#{schIdx + 1}</span>
+                                  <div className="sch-name-wrap">
+                                    <span className="sch-name" title={sch.name}>{sch.name}</span>
+                                  </div>
+                                </div>
+
+                                <div className="sch-compact-right">
+                                  <span className="sch-count-tag">{sch.count} คน</span>
+                                  <div className={`sch-score-chip gain ${sch.diff >= 0 ? "positive" : "negative"}`} title="ยอดคะแนนที่เพิ่มขึ้น">
+                                    <TrendingUp size={11} />
+                                    <span className="val">{diffText}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="sch-compact-bar-row">
+                                <span className="sch-bar-sub">
+                                  ก่อน <b>{sch.avgPre.toFixed(1)}</b> → หลัง <b style={{ color: "var(--good)" }}>{sch.avgPost.toFixed(1)}</b>
+                                </span>
+                                <div className="sch-bar-track">
+                                  <div
+                                    className="sch-bar-fill"
+                                    style={{ width: `${barPct}%` }}
+                                    title={`${sch.name}: ${sch.count} คน`}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const renderSchoolScoreBarChart = (scoreBySchool: Record<string, { pre: number; post: number; count: number }>) => {
@@ -1156,11 +1454,13 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
                 </div>
 
                 {/* 1. โรงเรียน / สถาบันที่ตอบเยอะที่สุด */}
-                <div className="stat-card tint-c">
-                  <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Award size={16}/> โรงเรียน / สถาบันที่ตอบเยอะที่สุด
-                  </h3>
-                  {renderDetailedBarChart(stats.bySchool || {}, stats.scoreBySchool || {}, 5)}
+                <div className="stat-card white full-width">
+                  <div style={{ marginBottom: 12 }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                      <Award size={18} color="var(--ice-600)" /> โรงเรียน / สถาบันที่ตอบเยอะที่สุด
+                    </h3>
+                  </div>
+                  {renderSchoolStatsByProvince(stats.schoolsByProvince || {}, stats.scoreBySchool || {}, stats.bySchool || {})}
                 </div>
 
                 {/* 2. จังหวัดที่ตอบเยอะที่สุด */}
