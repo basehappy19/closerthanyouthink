@@ -1398,7 +1398,40 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
 
           {currentPhase === "media" && (
             <div className="phase active card">
+              <div className="phase-header-with-back" style={{ marginBottom: 12 }}>
+                <span className="round-badge pre">
+                  สื่อการเรียนรู้
+                </span>
+                <button
+                  type="button"
+                  className="btn-back-link"
+                  onClick={() => { setCurrentPhase("questions-r1"); scrollToTop(); }}
+                >
+                  <ArrowLeft size={15} /> ย้อนกลับ
+                </button>
+              </div>
+
               <h2>ก่อนตอบอีกรอบ ลองดูคลิปกับโปสเตอร์นี้ก่อนนะ</h2>
+
+              <div style={{ marginBottom: 20 }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => { setCurrentPhase("questions-r2"); scrollToTop(); }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                    width: "100%",
+                    padding: "14px 20px",
+                    fontSize: 15,
+                    boxShadow: "0 4px 14px rgba(15,92,107,0.22)"
+                  }}
+                >
+                  ทำแบบสำรวจรอบหลัง <ArrowRight size={18} />
+                </button>
+              </div>
               <div className="media-block">
                 <div className="media-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Video size={16} /> คลิปวิดีโอรณรงค์</div>
                 <div className="video-frame">
