@@ -1429,7 +1429,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
                     boxShadow: "0 4px 14px rgba(15,92,107,0.22)"
                   }}
                 >
-                  ทำแบบสำรวจรอบหลัง <ArrowRight size={18} />
+                  ถัดไป <ArrowRight size={18} />
                 </button>
               </div>
               <div className="media-block">
@@ -1480,7 +1480,7 @@ export default function ClientPage({ initialSchools, initialStats, hasSubmitted 
                   onClick={() => { setCurrentPhase("questions-r2"); scrollToTop(); }}
                   style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
                 >
-                  ทำแบบสำรวจรอบหลัง <ArrowRight size={18} />
+                  ถัดไป <ArrowRight size={18} />
                 </button>
               </div>
             </div>
